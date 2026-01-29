@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Go WebSocket Chat</title>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    .chat-container {
+      width: 420px;
+      height: 600px;
+      background: white;
+      display: flex;
+      flex-direction: column;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+
+    .chat-header {
+      padding: 12px;
+      background: #2563eb;
+      color: white;
+      text-align: center;
+      font-weight: bold;
+    }
+
+    .status {
+      text-align: center;
+      font-size: 12px;
+      padding: 4px;
+      background: #eef2ff;
+    }
+
+    .chat-messages {
+      flex: 1;
+      padding: 10px;
+      overflow-y: auto;
+      background: #eef2ff;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .message {
+      margin-bottom: 8px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      max-width: 70%;
+      word-wrap: break-word;
+      animation: fadeIn 0.3s ease-in;
+    }
+
+    .message.sent {
+      background: #2563eb;
+      color: white;
+      margin-left: auto;
+      text-align: right;
+    }
+
+    .message.received {
+      background: white;
+      color: black;
+      margin-right: auto;
+    }
+
+    .meta {
+      font-size: 10px;
+      opacity: 0.7;
+      margin-top: 4px;
+    }
+
+    .chat-input {
+      display: flex;
+      padding: 10px;
+      border-top: 1px solid #ddd;
+    }
+
+    .chat-input textarea {
+      flex: 1;
+      resize: none;
+      height: 40px;
+      padding: 8px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      outline: none;
+    }
+
+    .chat-input button {
+      margin-left: 8px;
+      padding: 8px 16px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .chat-input button:disabled {
+      background: #aaa;
+      cursor: not-allowed;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="chat-container">
+    <div class="chat-header">Go WebSocket Chat</div>
+    <div id="status" class="status">Connecting...</div>
+
+    <div id="messages" class="chat-messages"></div>
+
+    <form id="chat-form" class="chat-input">
+      <textarea id="message-input" placeholder="Type a message..."></textarea>
+      <button id="send-btn" type="submit">Send</button>
+    </form>
+  </div>
+
+  <script>
+    (function () {
+      const username = prompt("Enter your name:") || "Anonymous";
+
+      const messages = document.getElementById("messages");
+      const form = document.getElementById("chat-form");
+      const input = document.getElementById("message-input");
+      const status = document.getElementById("status");
+      const sendBtn = document.getElementById("send-btn");
+
+      let lastSent = "";
+
+      input.focus();
+
+      const socket = new WebSocket(
+        "ws://" + window.location.host + "/room"
+      );
+
+      socket.onopen = () => {
+        status.textContent = "Connected as " + username;
+        sendBtn.disabled = false;
+      };
+
+      socket.onclose = () => {
+        status.textContent = "Disconnected";
+        sendBtn.disabled = true;
+      };
+
+      socket.onerror = () => {
+        status.textContent = "Connection error";
+        sendBtn.disabled = true;
+      };
+
+      function addMessage(text, type) {
+        const msgDiv = document.createElement("div");
+        msgDiv.className = "message " + type;
+
+        const time = new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+
+        msgDiv.innerHTML = `
+          <div>${text}</div>
+          <div class="meta">${time}</div>
+        `;
+
+        messages.appendChild(msgDiv);
+        messages.scrollTop = messages.scrollHeight;
+      }
+
+      socket.onmessage = (event) => {
+        if (event.data === lastSent) {
+          lastSent = "";
+          return;
+        }
+        addMessage(event.data, "received");
+      };
+
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        sendMessage();
+      });
+
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+      });
+
+      function sendMessage() {
+        const text = input.value.trim();
+        if (!text || socket.readyState !== WebSocket.OPEN) return;
+
+        const payload = username + ": " + text;
+        lastSent = payload;
+
+        addMessage(payload, "sent");
+        socket.send(payload);
+        input.value = "";
+      }
+    })();
+  </script>
+</body>
+</html>
